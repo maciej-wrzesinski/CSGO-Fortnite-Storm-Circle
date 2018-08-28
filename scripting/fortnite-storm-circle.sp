@@ -11,8 +11,8 @@ public Plugin myinfo =
 {
 	name = "Fortnite Storm Circle",
 	author = "Maciej Wrzesiński",
-	description = "Storm Circle feature from Fortnite",
-	version = "0.3",
+	description = "Storm Circle that is getting smaller every second and deals damage to those outside of it",
+	version = "1.0",
 	url = "https://github.com/maciej-wrzesinski/"
 };
 
@@ -30,12 +30,14 @@ ConVar cvStandDuration;
 ConVar cvDamage;
 ConVar cvTickRate;
 ConVar cvColor;
+ConVar cvRandom;
 float g_fCvarStartTime;
 float g_fCvarShrinkDuration;
 float g_fCvarShrinkAmount;
 float g_fCvarStandDuration;
 float g_fCvarDamage;
 float g_fCvarTickRate;
+int g_fCvarRandom;
 int g_iCvarColor[4];
 
 char g_cSpriteLaser[] = "materials/sprites/laserbeam.vmt";
@@ -47,15 +49,19 @@ Handle g_hTickTimer = INVALID_HANDLE;
 
 public void OnPluginStart()
 {
-	cvStartTime = CreateConVar("fsc_start", "0.1", "After how many seconds does the Storm Circle start? (0.0 = never)", _, true, 0.1, true, 999.0);
-	cvShrinkDuration = CreateConVar("fsc_shrink_duration", "10.0", "How many seconds of shrinking does it take for Storm Circle until it stands?", _, true, 0.1, true, 999.0);
-	cvShrinkAmount = CreateConVar("fsc_shrink_amount", "20.0", "How many units the Storm Circle shrinks per one tick?", _, true, 0.5, true, 999.0);
-	cvStandDuration = CreateConVar("fsc_stand_duration", "2.0", "After how many seconds does the Storm Circle shrinks again?", _, true, 0.1, true, 999.0);
-	cvDamage = CreateConVar("fsc_damage", "1.0", "How much damage should Storm Circle deal per one tick? (0.0 = instant death)", _, true, 0.0, true, 999.0);
-	cvTickRate = CreateConVar("fsc_tickrate", "0.1", "How often does the Storm Circle updates its visuals and deals damage? (small values recomended)", _, true, 0.1, true, 10.0);
-	cvColor = CreateConVar("fsc_color", "50 50 255 200", "What color is the Storm Circle?", _);
+	HookEvent("round_start", RoundStart);
+	HookEvent("round_end", RoundEnd);
 	
-	RegAdminCmd("sm_forcesc", CMD_StormForce, ADMFLAG_ROOT);
+	cvStartTime = CreateConVar("fsc_start", "0.1", "After how many seconds since round start does the Storm Circle triggers? (0.0 = never)", _, true, 0.0);
+	cvShrinkDuration = CreateConVar("fsc_shrink_duration", "10.0", "How many seconds of shrinking does it take for Storm Circle until it stands?", _, true, 0.1);
+	cvShrinkAmount = CreateConVar("fsc_shrink_amount", "5.0", "How many in-game units the Storm Circle shrinks per one tick?", _, true, 0.1);
+	cvStandDuration = CreateConVar("fsc_stand_duration", "2.0", "After how many seconds does the Storm Circle shrinks again?", _, true, 0.1);
+	cvDamage = CreateConVar("fsc_damage", "1.0", "How much damage should Storm Circle deal per one tick? (0.0 = instant death)", _, true, 0.0);
+	cvTickRate = CreateConVar("fsc_tickrate", "0.1", "How often does the Storm Circle updates its visuals and deals damage? (small values recomended)", _, true, 0.1, true, 10.0);
+	cvColor = CreateConVar("fsc_color", "50 50 255 200", "What color is the Storm Circle? (R G B A)", _);
+	cvRandom = CreateConVar("fsc_randomcenter", "1", "Is the center of Storm Circle random? (0 = center of the map)", _);
+	
+	RegAdminCmd("sm_forcesc", CMD_StormForce, ADMFLAG_ROOT, "Forces Storm Circle to reset and appear on the map.");
 }
 
 public void OnConfigsExecuted()
@@ -66,6 +72,7 @@ public void OnConfigsExecuted()
 	g_fCvarStandDuration = GetConVarFloat(cvStandDuration);
 	g_fCvarDamage = GetConVarFloat(cvDamage);
 	g_fCvarTickRate = GetConVarFloat(cvTickRate);
+	g_fCvarRandom = GetConVarInt(cvRandom);
 	
 	char tempstring[17];
 	char tempstring2[5][5];
@@ -82,16 +89,32 @@ public void OnMapStart()
 	g_iSpriteLaser = PrecacheModel(g_cSpriteLaser);
 }
 
+public Action RoundStart(Handle event, const char[] name, bool dontBroadcast)
+{
+	if (g_fCvarStartTime != 0.1)
+		StormPrepare(true);
+}
+
+public Action RoundEnd(Handle event, const char[] name, bool dontBroadcast)
+{
+	StormDelete();
+}
+
 public Action CMD_StormForce(int client, int args)
+{
+	StormDelete();
+	
+	StormPrepare(false);
+}
+
+stock void StormDelete()
 {
 	if (IsValidHandle(g_hBeginTimer)) KillTimer(g_hBeginTimer);
 	if (IsValidHandle(g_hFunctionTimer)) KillTimer(g_hFunctionTimer);
 	if (IsValidHandle(g_hTickTimer)) KillTimer(g_hTickTimer);
-	
-	StormPrepare();
 }
 
-stock void StormPrepare()
+stock void StormPrepare(bool wait_the_start_cvar)
 {
 	float fWorldMinVec[3], fWorldMaxVec[3], fOldWorldMinVec[3], fOldWorldMaxVec[3];
 	GetEntPropVector(0, Prop_Data, "m_WorldMins", fWorldMinVec);
@@ -124,11 +147,22 @@ stock void StormPrepare()
 	fWorldMaxVec[2] = 0.0;
 	AddVectors(fWorldMinVec, fWorldMaxVec, g_fStormOrigin);
 	
+	if (g_fCvarRandom)
+	{
+		g_fStormOrigin[0] += GetRandomFloat(fWorldMinVec[0]/2, fWorldMaxVec[0]/2);
+		g_fStormOrigin[1] += GetRandomFloat(fWorldMinVec[1]/2, fWorldMaxVec[1]/2);
+	}
+	
 	//Begin the Storm Circle
-	if (g_fCvarStartTime != 0.0)
+	if (wait_the_start_cvar)
 	{
 		g_hBeginTimer = CreateTimer(g_fCvarStartTime, StormBegin);
 		g_hFunctionTimer = CreateTimer(g_fCvarStartTime, StormFunction);
+	}
+	else
+	{
+		g_hBeginTimer = CreateTimer(0.1, StormBegin);
+		g_hFunctionTimer = CreateTimer(0.1, StormFunction);
 	}
 }
 
@@ -140,9 +174,9 @@ public Action StormBegin(Handle hTimer)
 
 public Action StormShrink(Handle hTimer)
 {
+	//Stop shrinking and messages
 	if (g_fStormCurrentRadius == 0.0)
 	{
-		PrintToChatAll("Storm Circle stops!");
 		return;
 	}
 	
@@ -160,7 +194,24 @@ public Action StormStand(Handle hTimer)
 
 public Action StormFunction(Handle hTimer)
 {
+	//Shrink if needed
+	if (g_bStormIsShrinking == true)
+	{
+		g_fStormCurrentRadius = g_fStormCurrentRadius - g_fCvarShrinkAmount > 0.0 ? g_fStormCurrentRadius - g_fCvarShrinkAmount : 0.0;
+	}
+	
 	//Deal damage to those outside the circle
+	StormDealDamage();
+	
+	//Draw the Storm
+	StormDrawBeamPoints();
+	
+	//Repeat
+	g_hTickTimer = CreateTimer(g_fCvarTickRate, StormFunction);
+}
+
+stock void StormDealDamage()
+{
 	for (int i = 1; i <= MAX_PLAYERS; i++)
 	{
 		if (IsClientValid(i) && !IsClientSourceTV(i) && IsPlayerAlive(i))
@@ -169,7 +220,7 @@ public Action StormFunction(Handle hTimer)
 			GetClientAbsOrigin(i, PlayerOrigin);
 			PlayerOrigin[2] = 0.0; //because the storms origin Z is also 0.0
 			
-			if (GetVectorDistance(PlayerOrigin, g_fStormOrigin, false) > (g_fStormCurrentRadius/2)+70.0)//+70 for better particle matching
+			if (GetVectorDistance(PlayerOrigin, g_fStormOrigin, false) > (g_fStormCurrentRadius/2)+100.0)//+100 for better particle matching
 			{
 				if (g_fCvarDamage == 0.0)
 					SDKHooks_TakeDamage(i, 0, 0, 9999.0);
@@ -180,18 +231,6 @@ public Action StormFunction(Handle hTimer)
 			}
 		}
 	}
-	
-	//Shrink if needed
-	if (g_bStormIsShrinking == true)
-	{
-		g_fStormCurrentRadius = g_fStormCurrentRadius - g_fCvarShrinkAmount > 0.0 ? g_fStormCurrentRadius - g_fCvarShrinkAmount : 0.0;
-	}
-	
-	//Draw the Storm
-	StormDrawBeamPoints();
-	
-	//Repeat
-	g_hTickTimer = CreateTimer(g_fCvarTickRate, StormFunction);
 }
 
 stock void StormDrawBeamPoints()
