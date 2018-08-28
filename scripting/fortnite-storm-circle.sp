@@ -68,9 +68,9 @@ public void OnConfigsExecuted()
 	g_fCvarTickRate = GetConVarFloat(cvTickRate);
 	
 	char tempstring[17];
-	char tempstring2[5][4];
+	char tempstring2[5][5];
 	GetConVarString(cvColor, tempstring, 16);
-	ExplodeString(tempstring, "", tempstring2, 4, 3);
+	ExplodeString(tempstring, " ", tempstring2, 4, 4);
 	g_iCvarColor[0] = StringToInt(tempstring2[0]);
 	g_iCvarColor[1] = StringToInt(tempstring2[1]);
 	g_iCvarColor[2] = StringToInt(tempstring2[2]);
@@ -198,7 +198,6 @@ stock void StormDrawBeamPoints()
 {
 	float fNumOfParticles = 5.0;
 	
-			
 	float fBeamWidth = g_fStormCurrentRadius;
 	int iStartFrame = 0;
 	int iFrameRate = 0;
