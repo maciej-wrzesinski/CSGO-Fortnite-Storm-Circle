@@ -3,6 +3,9 @@ This plugin is the "Storm Circle" feature from Fortnite game, written in SourceM
 
 # Changelog
 ```
+1.0.1
+- 'Fixed' float number display so it has only 2 digits after decimal
+
 1.0
 - Official version release
 - Added more cvars
