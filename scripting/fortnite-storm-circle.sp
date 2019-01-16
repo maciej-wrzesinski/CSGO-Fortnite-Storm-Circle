@@ -10,9 +10,9 @@
 public Plugin myinfo =
 {
 	name = "Fortnite Storm Circle",
-	author = "Maciej WrzesiÅ„ski",
+	author = "Maciej Wrzesiñski",
 	description = "Storm Circle that is getting smaller every second and deals damage to those outside of it",
-	version = "1.0",
+	version = "1.0.1",
 	url = "https://github.com/maciej-wrzesinski/"
 };
 
@@ -180,14 +180,14 @@ public Action StormShrink(Handle hTimer)
 		return;
 	}
 	
-	PrintToChatAll("Storm Circle shrinks! Next shrink in %f seconds!", g_fCvarShrinkDuration + g_fCvarStandDuration);
+	PrintToChatAll("Storm Circle shrinks! Next shrink in %.2f seconds!", g_fCvarShrinkDuration + g_fCvarStandDuration);
 	g_bStormIsShrinking = true;
 	g_hBeginTimer = CreateTimer(g_fCvarShrinkDuration, StormStand);
 }
 
 public Action StormStand(Handle hTimer)
 {
-	PrintToChatAll("Storm Circle stands! Next shrink in %f seconds!", g_fCvarShrinkDuration);
+	PrintToChatAll("Storm Circle stands! Next shrink in %.2f seconds!", g_fCvarShrinkDuration);
 	g_bStormIsShrinking = false;
 	g_hBeginTimer = CreateTimer(g_fCvarStandDuration, StormShrink);
 }
